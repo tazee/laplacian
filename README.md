@@ -5,7 +5,7 @@ This kit contains a direct modeling tool and a procedural mesh operator for Modo
 
 
 <div align="left">
-<img src="./images/laplacian.png" style='max-height: 350px; object-fit: contain'/>
+<img src="./images/Laplacian.png" style='max-height: 350px; object-fit: contain'/>
 </div>
 
 

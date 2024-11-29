@@ -1,5 +1,5 @@
 # Laplacian Smoothing tools for Modo plug-in
-This a Modo Plug-in kit to smooth mesh vertex positions using Laplacian algorithm based on a curvature flow Laplace Beltrami operator in a diffusion equation. This allows you to reduce noise on a mesh’s surface with minimal changes to its shape.
+This is a Modo Plug-in kit to smooth mesh vertex positions using Laplacian algorithm based on a curvature flow Laplace Beltrami operator in a diffusion equation. This allows you to reduce noise on a mesh’s surface with minimal changes to its shape.
 
 This kit contains a direct modeling tool and a procedural mesh operator for Modo macOS and Windows.
 

@@ -1,5 +1,6 @@
 /.DS_Store
 /.clang-format
 /.vscode
-/build
+build
 CMakePresets.json
+build/.DS_Store

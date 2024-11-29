@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 3.10)
 project(laplacian VERSION 1.0)
 
 set(LXSDK_PATH "../LXSDK-000025")
+set(LIBIGL_PATH "../libigl")
 
 # Get all source and headers for lxsdk
 file(GLOB LXSDK_SOURCES ${LXSDK_PATH}/common/*.cpp)
@@ -52,6 +53,7 @@ target_compile_features(laplacian
 target_include_directories(laplacian 
     PUBLIC
         ${LXSDK_PATH}/include
+    	${LIBIGL_PATH}/include
     	$<$<PLATFORM_ID:Darwin>:/usr/local/include>
 )
 
@@ -61,18 +63,34 @@ target_compile_options(laplacian
             -Wno-deprecated-declarations
             -Wno-error
         >
-)
-
-target_compile_definitions(laplacian
-    PRIVATE
-        IGL_STATIC_LIBRARY
+        $<$<CXX_COMPILER_ID:MSVC>:
+            /bigobj
+        >
 )
 
 # Set your Igl libraray
 target_link_libraries(laplacian
     PUBLIC
 	    lxsdk
-    PRIVATE
-   	    $<$<PLATFORM_ID:Darwin>:/usr/local/lib/libigl.a>
-#        Libigl::Libigl
+)
+
+# Install plugins and configs into kit directry
+install(
+    FILES
+        "index.cfg"
+        "index.html"
+    DESTINATION
+        "."
+)
+install(
+    DIRECTORY
+        "images"
+    DESTINATION
+        "."
+)
+install(
+    TARGETS
+        laplacian
+    DESTINATION
+        "extra"
 )

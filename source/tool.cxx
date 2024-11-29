@@ -18,13 +18,34 @@
 
 #include "mesh_helper.hxx"
 
-#include <igl/barycenter.h>
 #include <igl/cotmatrix.h>
-#include <igl/doublearea.h>
 #include <igl/grad.h>
-#include <igl/jet.h>
 #include <igl/massmatrix.h>
-#include <igl/per_vertex_normals.h>
+
+#ifndef LXx_OVERRIDE
+#define LXx_OVERRIDE override
+#endif
+
+/*
+ * The Tool Operation is evaluated by the procedural modeling system.
+ */
+class CToolOp : public CLxImpl_ToolOperation
+{
+	public:
+		LxResult    top_Evaluate(ILxUnknownID vts)  LXx_OVERRIDE;
+
+        bool LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh);
+
+        CLxUser_FalloffPacket falloff;
+        CLxUser_Subject2Packet subject;
+
+        unsigned offset_view;
+        unsigned offset_screen;
+        unsigned offset_falloff;
+        unsigned offset_subject;
+
+        int m_iter;
+};
 
 /*
  * The Laplacian smoothing tool. Basic tool and tool model methods are defined here. The
@@ -36,35 +57,34 @@ class CTool : public CLxImpl_Tool, public CLxImpl_ToolModel, public CLxDynamicAt
 public:
     CTool();
 
-    void        tool_Reset() override;
-    LXtObjectID tool_VectorType() override;
-    const char* tool_Order() override;
-    LXtID4      tool_Task() override;
-    void        tool_Evaluate(ILxUnknownID vts) override;
+    void        tool_Reset() LXx_OVERRIDE;
+    LXtObjectID tool_VectorType() LXx_OVERRIDE;
+    const char* tool_Order() LXx_OVERRIDE;
+    LXtID4      tool_Task() LXx_OVERRIDE;
+	LxResult	tool_GetOp(void **ppvObj, unsigned flags) LXx_OVERRIDE;
 
-    unsigned    tmod_Flags() override;
-    void        tmod_Initialize(ILxUnknownID vts, ILxUnknownID adjust, unsigned flags) override;
-    LxResult    tmod_Enable(ILxUnknownID obj) override;
-    LxResult    tmod_Down(ILxUnknownID vts, ILxUnknownID adjust) override;
-    void        tmod_Move(ILxUnknownID vts, ILxUnknownID adjust) override;
+    unsigned    tmod_Flags() LXx_OVERRIDE;
+    LxResult    tmod_Enable(ILxUnknownID obj) LXx_OVERRIDE;
+    LxResult    tmod_Down(ILxUnknownID vts, ILxUnknownID adjust) LXx_OVERRIDE;
+    void        tmod_Move(ILxUnknownID vts, ILxUnknownID adjust) LXx_OVERRIDE;
 
     using CLxDynamicAttributes::atrui_UIHints;  // to distinguish from the overloaded version in CLxImpl_AttributesUI
 
-    void atrui_UIHints2(unsigned int index, CLxUser_UIHints& hints) override;
+    void atrui_UIHints2(unsigned int index, CLxUser_UIHints& hints) LXx_OVERRIDE;
+
+	static LXtTagInfoDesc	 descInfo[];
 
     bool TestPolygon();
-
-    bool LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh, int iter);
 
     CLxUser_LogService   s_log;
     CLxUser_LayerService s_layer;
     CLxUser_VectorType   v_type;
     CLxUser_SelectionService s_sel;
-    CLxUser_FalloffPacket falloff;
 
     unsigned offset_view;
     unsigned offset_screen;
     unsigned offset_falloff;
+    unsigned offset_subject;
     unsigned mode_select;
 
     int m_iter0;
@@ -91,10 +111,12 @@ CTool::CTool()
     sPkt.AddPacket(v_type, LXsP_TOOL_VIEW_EVENT, LXfVT_GET);
     sPkt.AddPacket(v_type, LXsP_TOOL_SCREEN_EVENT, LXfVT_GET);
     sPkt.AddPacket(v_type, LXsP_TOOL_FALLOFF, LXfVT_GET);
+    sPkt.AddPacket(v_type, LXsP_TOOL_SUBJECT2, LXfVT_GET);
 
     offset_view = sPkt.GetOffset(LXsCATEGORY_TOOL, LXsP_TOOL_VIEW_EVENT);
     offset_screen = sPkt.GetOffset(LXsCATEGORY_TOOL, LXsP_TOOL_SCREEN_EVENT);
     offset_falloff = sPkt.GetOffset(LXsCATEGORY_TOOL, LXsP_TOOL_FALLOFF);
+    offset_subject = sPkt.GetOffset(LXsCATEGORY_TOOL, LXsP_TOOL_SUBJECT2);
     mode_select = sMesh.SetMode("select");
 }
 
@@ -124,6 +146,35 @@ LXtID4 CTool::tool_Task()
     return LXi_TASK_ACTR;
 }
 
+LxResult CTool::tool_GetOp(void** ppvObj, unsigned flags)
+{
+    CLxSpawner<CToolOp> spawner("xfrm.laplacian.toolop");
+    CToolOp*            toolop = spawner.Alloc(ppvObj);
+
+	if (!toolop)
+	{
+		return LXe_FAILED;
+	}
+
+    dyna_Value(ATTRa_ITERATION).GetInt(&toolop->m_iter);
+
+    toolop->offset_view = offset_view;
+    toolop->offset_screen = offset_screen;
+    toolop->offset_falloff = offset_falloff;
+    toolop->offset_subject = offset_subject;
+
+	return LXe_OK;
+}
+
+LXtTagInfoDesc CTool::descInfo[] =
+{
+	{LXsTOOL_PMODEL, "."},
+	{LXsTOOL_USETOOLOP, "."},
+	{LXsPMODEL_SELECTIONTYPES, LXsSELOP_TYPE_VERTEX},
+	{0}
+
+};
+
 /*
  * We employ the simplest possible tool model -- default hauling. We indicate
  * that we want to haul one attribute, we name the attribute, and we implement
@@ -133,10 +184,6 @@ LXtID4 CTool::tool_Task()
 unsigned CTool::tmod_Flags()
 {
     return LXfTMOD_I0_INPUT;
-}
-
-void CTool::tmod_Initialize(ILxUnknownID /*vts*/, ILxUnknownID adjust, unsigned int /*flags*/)
-{
 }
 
 LxResult CTool::tmod_Enable(ILxUnknownID obj)
@@ -221,45 +268,25 @@ bool CTool::TestPolygon()
  * Tool evaluation uses layer scan interface to walk through all the active
  * meshes and visit all the selected polygons.
  */
-void CTool::tool_Evaluate(ILxUnknownID vts)
+LxResult CToolOp::top_Evaluate(ILxUnknownID vts)
 {
+    if (m_iter == 0)
+        return LXe_OK;
+
     CLxUser_VectorStack vec(vts);
-    LXpToolViewEvent*   view;
-
-    view = (LXpToolViewEvent*) vec.Read(offset_view);
-    if (!view || view->type != LXi_VIEWTYPE_3D)
-        return;
-
-    LXtID4  vertex_type = s_sel.LookupType(LXsSELTYP_VERTEX);
-    LXtID4  edge_type   = s_sel.LookupType(LXsSELTYP_EDGE);
-    LXtID4  poly_type   = s_sel.LookupType(LXsSELTYP_POLYGON);
-    LXtID4  item_type   = s_sel.LookupType(LXsSELTYP_ITEM);
-
-    LXtID4  currentTypes[5];
-    currentTypes[0] = vertex_type;
-    currentTypes[1] = edge_type;
-    currentTypes[2] = poly_type;
-    currentTypes[3] = item_type;
-    currentTypes[4] = 0;
-
-    LXtID4 cur = s_sel.CurrentType(currentTypes);
 
     /*
-     * Start the scan in edit-poly mode.
+     * Start the scan in edit mode.
      */
     CLxUser_LayerScan  scan;
     CLxUser_Mesh       base_mesh, edit_mesh;
 
-    s_layer.BeginScan(LXf_LAYERSCAN_EDIT_POLVRT, scan);
+    if (vec.ReadObject(offset_subject, subject) == false)
+        return LXe_FAILED;
+    if (vec.ReadObject(offset_falloff, falloff) == false)
+        return LXe_FAILED;
 
-    int      ival, iter;
-
-    dyna_Value(ATTRa_ITERATION).GetInt(&iter);
-    if (iter == 0)
-        return;
-
-    CLxUser_VectorStack vectorStack(vts);
-    vectorStack.ReadObject(offset_falloff, falloff);
+    subject.BeginScan(LXf_LAYERSCAN_EDIT_VERTS, scan);
 
     auto n = scan.NumLayers();
     for (auto i = 0u; i < n; i++)
@@ -268,16 +295,17 @@ void CTool::tool_Evaluate(ILxUnknownID vts)
         scan.EditMeshByIndex(i, edit_mesh);
 
         // Laplacian Smoothing
-        LaplacianSmoothing(base_mesh, edit_mesh, iter);
+        LaplacianSmoothing(base_mesh, edit_mesh);
 
         scan.SetMeshChange(i, LXf_MESHEDIT_POSITION);
     }
 
     scan.Apply();
+    return LXe_OK;
 }
 
 
-bool CTool::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh, int iter)
+bool CToolOp::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh)
 {
     using namespace Eigen;
 
@@ -315,7 +343,7 @@ bool CTool::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh,
             vrt->w = falloff.Evaluate(fv, vrt->pnt, nullptr);
         }
 
-        for (auto i = 0; i < iter; i++)
+        for (auto i = 0; i < m_iter; i++)
         {
             // Recompute just mass matrix on each step
             SparseMatrix<double> M;
@@ -348,5 +376,10 @@ void initialize()
     srv->AddInterface(new CLxIfc_ToolModel<CTool>);
     srv->AddInterface(new CLxIfc_Attributes<CTool>);
     srv->AddInterface(new CLxIfc_AttributesUI<CTool>);
+    srv->AddInterface(new CLxIfc_StaticDesc<CTool>);
     thisModule.AddServer("xfrm.laplacian", srv);
+
+    srv = new CLxPolymorph<CToolOp>;
+    srv->AddInterface(new CLxIfc_ToolOperation<CToolOp>);
+    lx::AddSpawner("xfrm.laplacian.toolop", srv);
 }

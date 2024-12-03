@@ -4,8 +4,10 @@ cmake_minimum_required(VERSION 3.10)
 
 project(laplacian VERSION 1.0)
 
+# set your directory pathes below
 set(LXSDK_PATH "../LXSDK-000025")
-set(LIBIGL_PATH "../libigl")
+set(LIBIGL_PATH "../libigl-2.5.0")
+set(EIGEN_PATH "../eigen-3.4.0")
 
 # Get all source and headers for lxsdk
 file(GLOB LXSDK_SOURCES ${LXSDK_PATH}/common/*.cpp)
@@ -54,7 +56,7 @@ target_include_directories(laplacian
     PUBLIC
         ${LXSDK_PATH}/include
     	${LIBIGL_PATH}/include
-    	$<$<PLATFORM_ID:Darwin>:/usr/local/include>
+    	${EIGEN_PATH}
 )
 
 target_compile_options(laplacian

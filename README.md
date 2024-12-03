@@ -24,14 +24,14 @@ The procedural mesh operator as **Laplacian Smoothing** is under Deform tab on M
 <img src="./images/meshop.png" style='max-height: 350px; object-fit: contain'/>
 </div>
 
-## Building codes
+## Dependencies
 
-- LXSDK
-This kit requires Modo SDK (Modo 16.1v8 or later). Download and build LXSDK and set you LXSDK path to LXSDK_PATH in CMakeLists.txt in triagulate.
-- Igl library.
-This also requires Igl library. Download and build Igl from below and set the include path to CMakeLists.txt. libigl is header only library.
-- Eigen
-This also requires Eigen library. Download and install Eigen libray into your system.
+- LXSDK  
+This kit requires Modo SDK (Modo 16.1v8 or later). Download LXSDK and set you LXSDK path to LXSDK_PATH in CMakeLists.txt in triagulate.
+- libigl 2.5.0 (https://github.com/libigl/libigl)  
+This also requires Igl library. Download libigl and set the include path to LIBIGL_PATH in CMakeLists.txt. libigl is header only library.
+- Eigen 3.4.0 (https://gitlab.com/libeigen/eigen)  
+This also requires Eigen library. Download eigen and set the include path to EIGEN_PATH in CMakeLists.. Eigen is header only library
 
 ## License
 

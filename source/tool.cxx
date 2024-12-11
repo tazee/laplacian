@@ -44,7 +44,7 @@ class CToolOp : public CLxImpl_ToolOperation
         unsigned offset_falloff;
         unsigned offset_subject;
 
-        int m_iter;
+        double m_strength;
 };
 
 /*
@@ -87,12 +87,12 @@ public:
     unsigned offset_subject;
     unsigned mode_select;
 
-    int m_iter0;
+    double m_strength0;
 };
 
-#define ATTRs_ITERATION "iteration"
+#define ATTRs_STRENGTH "strength"
 
-#define ATTRa_ITERATION   0
+#define ATTRa_STRENGTH   0
 
 /*
  * On create we add our one tool attribute. We also allocate a vector type
@@ -103,7 +103,7 @@ CTool::CTool()
     CLxUser_PacketService sPkt;
     CLxUser_MeshService   sMesh;
 
-    dyna_Add(ATTRs_ITERATION, LXsTYPE_INTEGER);
+    dyna_Add(ATTRs_STRENGTH, LXsTYPE_FLOAT);
 
     tool_Reset();
 
@@ -125,7 +125,7 @@ CTool::CTool()
  */
 void CTool::tool_Reset()
 {
-    dyna_Value(ATTRa_ITERATION).SetInt(0);
+    dyna_Value(ATTRa_STRENGTH).SetFlt(0.0);
 }
 
 /*
@@ -156,7 +156,7 @@ LxResult CTool::tool_GetOp(void** ppvObj, unsigned flags)
 		return LXe_FAILED;
 	}
 
-    dyna_Value(ATTRa_ITERATION).GetInt(&toolop->m_iter);
+    dyna_Value(ATTRa_STRENGTH).GetFlt(&toolop->m_strength);
 
     toolop->offset_view = offset_view;
     toolop->offset_screen = offset_screen;
@@ -201,7 +201,7 @@ LxResult CTool::tmod_Enable(ILxUnknownID obj)
 
 LxResult CTool::tmod_Down(ILxUnknownID vts, ILxUnknownID adjust)
 {
-    dyna_Value(ATTRa_ITERATION).GetInt(&m_iter0);
+    dyna_Value(ATTRa_STRENGTH).GetFlt(&m_strength0);
     return LXe_TRUE;
 }
 
@@ -211,18 +211,18 @@ void CTool::tmod_Move(ILxUnknownID vts, ILxUnknownID adjust)
     CLxUser_VectorStack vec(vts);
     LXpToolScreenEvent* spak = static_cast<LXpToolScreenEvent*>(vec.Read(offset_screen));
 
-    int iter = m_iter0 + (spak->cx - spak->px) / 10;
-    if (iter < 0)
-        iter = 0;
-    at.SetInt(ATTRa_ITERATION, iter);
+    double strength = m_strength0 + (spak->cx - spak->px) * 0.1;
+    if (strength < 0.0)
+        strength = 0.0;
+    at.SetFlt(ATTRa_STRENGTH, strength);
 }
 
 void CTool::atrui_UIHints2(unsigned int index, CLxUser_UIHints& hints)
 {
     switch (index)
     {
-        case ATTRa_ITERATION:
-            hints.MinInt(0);
+        case ATTRa_STRENGTH:
+            hints.MinFloat(0.0);
             break;
     }
 }
@@ -270,7 +270,7 @@ bool CTool::TestPolygon()
  */
 LxResult CToolOp::top_Evaluate(ILxUnknownID vts)
 {
-    if (m_iter == 0)
+    if (m_strength == 0.0)
         return LXe_OK;
 
     CLxUser_VectorStack vec(vts);
@@ -343,7 +343,15 @@ bool CToolOp::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mes
             vrt->w = falloff.Evaluate(fv, vrt->pnt, nullptr);
         }
 
-        for (auto i = 0; i < m_iter; i++)
+        auto count = static_cast<int>(m_strength);
+        bool succeess = true;
+    
+        double f = m_strength - static_cast<double>(count);
+        //printf("** m_strength: %f, count: %d f = %f\n", m_strength, count, f);
+        if (f > 0.0)
+            count++;
+
+        for (auto i = 0; i < count; i++)
         {
             // Recompute just mass matrix on each step
             SparseMatrix<double> M;
@@ -352,10 +360,27 @@ bool CToolOp::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mes
             const auto & S = (M - 0.001*L);
             Eigen::SimplicialLLT<Eigen::SparseMatrix<double > > solver(S);
             if (solver.info() != Eigen::Success)
+            {
+                succeess = false;
                 break;
-            U = solver.solve(M*U).eval();
-
-            helper.FitResult(grp, U);
+            }
+            // Interpolate between previous and current solution
+            if ((i == (count - 1)) && (f > 0.0))
+            {
+                MatrixXd U1 = solver.solve(M*U).eval();
+                helper.FitResult(grp, U1);
+                for (auto i = 0; i < U.rows(); i++)
+                {
+                    for (auto j = 0; j < U.cols(); j++)
+                        U(i, j) = (U1(i, j) - U(i, j)) * f + U(i, j);
+                }
+            }
+            // Solve U = M^(-1) * M * U
+            else
+            {
+                U = solver.solve(M*U).eval();
+                helper.FitResult(grp, U);
+            }
         }
 
         helper.SetResult(grp, U);

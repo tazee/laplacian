@@ -8,12 +8,14 @@ This kit contains a direct modeling tool and a procedural mesh operator for Modo
 <img src="./images/Laplacian.png" style='max-height: 350px; object-fit: contain'/>
 </div>
 
+strength: 0.0, 1.0, 2.0 from left to right
+
 
 ## Installing
 - Download lpk from releases. Drag and drop into your Modo viewport. If you're upgrading, delete previous version.
 
 ## How to use Laplacian tool
-The laplacian smoothing tool is named **xfrm.laplacian**. Type **tool.set xfrm.laplacian on** on command field of command history viewport. After setup the laplacian smoothing tool, you can see **Iterations** attribute on the tool property viewport.
+The laplacian smoothing tool is named **xfrm.laplacian**. Type **tool.set xfrm.laplacian on** on command field of command history viewport. After setup the laplacian smoothing tool, you can see **Strength** attribute on the tool property viewport.
 This supports falloff weights.
 <div align="left">
 <img src="./images/toolset.png" style='max-height: 350px; object-fit: contain'/>

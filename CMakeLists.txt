@@ -116,7 +116,7 @@ endif()
 install(
     FILES
         "index.cfg"
-        "index.html"
+        "README.html"
     DESTINATION
         ${CMAKE_INSTALL_PREFIX}
 )

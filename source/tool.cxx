@@ -34,7 +34,10 @@ class CToolOp : public CLxImpl_ToolOperation
 	public:
 		LxResult    top_Evaluate(ILxUnknownID vts)  LXx_OVERRIDE;
 
-        bool LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh);
+        bool LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh, LXtID4 sel_type);
+        bool SmoothingTriangles(MeshHelper& helper);
+        bool SmoothingEdgeLoops(MeshHelper& helper);
+
 
         CLxUser_FalloffPacket falloff;
         CLxUser_Subject2Packet subject;
@@ -170,7 +173,7 @@ LXtTagInfoDesc CTool::descInfo[] =
 {
 	{LXsTOOL_PMODEL, "."},
 	{LXsTOOL_USETOOLOP, "."},
-	{LXsPMODEL_SELECTIONTYPES, LXsSELOP_TYPE_VERTEX},
+	{LXsPMODEL_SELECTIONTYPES, LXsSELOP_TYPE_VERTEX "," LXsSELOP_TYPE_POLYGON "," LXsSELOP_TYPE_EDGE},
 	{0}
 
 };
@@ -286,7 +289,13 @@ LxResult CToolOp::top_Evaluate(ILxUnknownID vts)
     if (vec.ReadObject(offset_falloff, falloff) == false)
         return LXe_FAILED;
 
-    subject.BeginScan(LXf_LAYERSCAN_EDIT_VERTS, scan);
+    CLxUser_SelectionService s_sel;
+    LXtID4 edge_type = s_sel.LookupType(LXsSELTYP_EDGE);
+
+    if (subject.Type() == edge_type)
+        subject.BeginScan(LXf_LAYERSCAN_EDIT_EDGES, scan);
+    else
+        subject.BeginScan(LXf_LAYERSCAN_EDIT_POLVRT, scan);
 
     auto n = scan.NumLayers();
     for (auto i = 0u; i < n; i++)
@@ -295,7 +304,7 @@ LxResult CToolOp::top_Evaluate(ILxUnknownID vts)
         scan.EditMeshByIndex(i, edit_mesh);
 
         // Laplacian Smoothing
-        LaplacianSmoothing(base_mesh, edit_mesh);
+        LaplacianSmoothing(base_mesh, edit_mesh, subject.Type());
 
         scan.SetMeshChange(i, LXf_MESHEDIT_POSITION);
     }
@@ -305,11 +314,9 @@ LxResult CToolOp::top_Evaluate(ILxUnknownID vts)
 }
 
 
-bool CToolOp::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh)
+bool CToolOp::SmoothingTriangles(MeshHelper& helper)
 {
     using namespace Eigen;
-
-    MeshHelper helper(base_mesh);
 
     MatrixXd V, U;
     MatrixXi F;
@@ -385,6 +392,89 @@ bool CToolOp::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mes
 
         helper.SetResult(grp, U);
     }
+    return true;
+}
+
+
+bool CToolOp::SmoothingEdgeLoops(MeshHelper& helper)
+{
+    using namespace Eigen;
+
+    auto count = static_cast<int>(m_strength);
+    bool succeess = true;
+
+    double f = m_strength - static_cast<double>(count);
+    if (f > 0.0)
+        count++;
+
+    const double strength = 0.5;
+
+    for (auto& edgeLoop : helper.m_edgeLoops)
+    {
+        if (edgeLoop->vrts.size() < 3)
+            continue;
+    
+        CLxBoundingBox box0;
+        double radius0 = helper.EdgeLoopRadius(edgeLoop, box0);
+
+        for (auto i = 0; i < count; i++)
+        {
+            std::vector<CLxVector> newPos(edgeLoop->vrts.size());
+            for (auto iv = 0u; iv < edgeLoop->vrts.size(); iv++)
+            {
+                auto vrt = edgeLoop->vrts[iv];
+                LXx_VCPY(newPos[iv].v, vrt->pos);
+                if (edgeLoop->closed == false && iv == 0u)
+                    continue;
+                if (edgeLoop->closed == false && iv == (edgeLoop->vrts.size()-1))
+                    continue;
+                LXtFVector fv;
+                LXx_VCPY(fv, vrt->pos);
+                vrt->w = falloff.Evaluate(fv, vrt->pnt, nullptr);
+                auto prev = edgeLoop->vrts[(iv + edgeLoop->vrts.size() - 1) % edgeLoop->vrts.size()];
+                auto next = edgeLoop->vrts[(iv + 1) % edgeLoop->vrts.size()];
+                LXtVector delta;
+                LXx_VADD3(delta, prev->pos, next->pos);
+                LXx_VSCL(delta, 0.5);
+                LXx_VSUB(delta, vrt->pos);
+                LXx_VADDS3(newPos[iv].v, vrt->pos, delta, strength * vrt->w);
+            }
+            for (auto iv = 0u; iv < edgeLoop->vrts.size(); iv++)
+            {
+                auto vrt = edgeLoop->vrts[iv];
+                LXx_VCPY(vrt->pos, newPos[iv].v);
+            }
+
+            if (edgeLoop->closed)
+            {
+                CLxBoundingBox box1;
+                double radius1 = helper.EdgeLoopRadius(edgeLoop, box1);
+                double s = radius0 / radius1;
+                LXtVector center;
+                box1.center(center);
+                for (auto& vrt : edgeLoop->vrts)
+                {
+                    LXx_VSUB(vrt->pos, center);
+                    LXx_VSCL(vrt->pos, s);
+                    LXx_VADD(vrt->pos, center);
+                }
+            }
+        }
+    }
+    return true;
+}
+
+
+bool CToolOp::LaplacianSmoothing(CLxUser_Mesh& base_mesh, CLxUser_Mesh& edit_mesh, LXtID4 sel_type)
+{
+    MeshHelper helper(base_mesh, sel_type);
+
+    // Smooth triangles
+    SmoothingTriangles(helper);
+
+    // Smooth edge loops
+    SmoothingEdgeLoops(helper);
+
     helper.Apply(edit_mesh);
     return true;
 }

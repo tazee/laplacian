@@ -1,7 +1,9 @@
 # Laplacian Smoothing tools for Modo plug-in
-This is a Modo Plug-in kit to smooth mesh vertex positions using Laplacian algorithm based on a curvature flow Laplace Beltrami operator in a diffusion equation. This allows you to reduce noise on a mesh’s surface with minimal changes to its shape.
+This is a Modo Plug-in kit to smooth mesh vertex positions using Laplacian algorithm based on a curvature flow Laplace Beltrami operator in a diffusion equation. This allows you to reduce noise on a mesh’s surface with minimal changes to its shape.<br>
 
-This kit contains a direct modeling tool and a procedural mesh operator for Modo macOS and Windows.
+v1.1 works for edge loops and polylines. It relaxes selected continuous edge loops.
+
+This kit contains a direct modeling tool and a procedural mesh operator for Modo macOS and Windows.<br>
 
 
 <div align="left">
@@ -11,14 +13,23 @@ This kit contains a direct modeling tool and a procedural mesh operator for Modo
 strength: 0.0, 1.0, 2.0 from left to right
 
 
+<div align="left">
+<img src="./images/edgeLoop.gif"/>
+</div>
+
+Relaxing edge loops
+
+
 ## Installing
 - Download lpk from releases. Drag and drop into your Modo viewport. If you're upgrading, delete previous version.
 
 ## How to use Laplacian tool
-The laplacian smoothing tool is named **xfrm.laplacian**. Type **tool.set xfrm.laplacian on** on command field of command history viewport. After setup the laplacian smoothing tool, you can see **Strength** attribute on the tool property viewport.
+The laplacian smoothing tool is named **xfrm.laplacian**. 
+The tool version of laplacian smoothing can be launched from **Laplacian Smoothing** button on **Deform** tab of **Model** ToolBar on left. After setup the laplacian smoothing tool, you can see **Strength** attribute on the tool property viewport.
 This supports falloff weights.
+
 <div align="left">
-<img src="./images/toolset.png" style='max-height: 350px; object-fit: contain'/>
+<img src="./images/UI.png" style='max-height: 500px; object-fit: contain'/>
 </div>
 
 The procedural mesh operator as **Laplacian Smoothing** is under Deform tab on Mesh Operator viewport. 

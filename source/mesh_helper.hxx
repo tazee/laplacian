@@ -37,11 +37,13 @@ struct MeshHelper
     struct Edge;
     struct Triangle;
     struct Group;
+    struct EdgeLoop;
 
     typedef std::shared_ptr<Verx>     VerxID;
     typedef std::shared_ptr<Edge>     EdgeID;
     typedef std::shared_ptr<Triangle> TriangleID;
     typedef std::shared_ptr<Group>    GroupID;
+    typedef std::shared_ptr<EdgeLoop> EdgeLoopID;
 
     struct Verx
     {
@@ -78,6 +80,13 @@ struct MeshHelper
         std::vector<TriangleID>     tris;   // triangles of the face
     };
 
+    struct EdgeLoop
+    {
+        unsigned                    index;
+        bool                        closed; // loop is closed
+        std::vector<VerxID>         vrts;   // vertices along edge loop
+    };
+
     struct Group
     {
         unsigned                    index;
@@ -93,6 +102,7 @@ struct MeshHelper
     std::vector<EdgeID>     m_edges;
     std::vector<VerxID>     m_vertices;
     std::vector<TriangleID> m_triangles;
+    std::vector<EdgeLoopID> m_edgeLoops;
 
     std::unordered_map<LXtPolygonID, Face> m_faces;
     std::unordered_map<std::pair<VerxID,VerxID>, EdgeID> m_edgemap;
@@ -114,7 +124,7 @@ struct MeshHelper
 
     CLxUser_LogService   s_log;
 
-    MeshHelper(CLxUser_Mesh& mesh);
+    MeshHelper(CLxUser_Mesh& mesh, LXtID4 sel_type);
 
     void Clear()
     {
@@ -123,6 +133,7 @@ struct MeshHelper
         m_triangles.clear();
         m_faces.clear();
         m_groups.clear();
+        m_edgeLoops.clear();
         m_edgemap.clear();
     }
 
@@ -143,4 +154,5 @@ struct MeshHelper
     bool     IsSeamEdge(CLxUser_Edge& edge);
     LXtPolygonID TracePolygon(LXtPointID vrt, LXtPolygonID pol, int shift);
     TriangleID  FetchTriangle(LXtPointID pnt, LXtPolygonID pol);
+    double EdgeLoopRadius(EdgeLoopID edgeLoop, CLxBoundingBox& box);
 };

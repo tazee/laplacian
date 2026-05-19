@@ -1027,7 +1027,7 @@ MeshHelper::MeshHelper(CLxUser_Mesh& mesh, LXtID4 sel_type)
         markVisitor.m_poly.Enum(&markVisitor, LXiMARK_ANY);
 
     bool allSelected = (markVisitor.m_selected > 0) && (markVisitor.m_selected == markVisitor.m_count);
-    if (allSelected and (m_type != LXiSEL_POLYGON))
+    if (allSelected && (m_type != LXiSEL_POLYGON))
     {
         markVisitor.m_type = LXiSEL_POLYGON;
         markVisitor.m_poly.Enum(&markVisitor, LXiMARK_ANY);

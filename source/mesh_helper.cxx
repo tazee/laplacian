@@ -200,6 +200,10 @@ public:
 class EdgeLoopVisitor : public CLxImpl_AbstractVisitor
 {
 public:
+    EdgeLoopVisitor()
+    {
+        m_sel_branch = false;
+    }
     LxResult Evaluate()
     {
         if (m_type == LXiSEL_EDGE)
@@ -408,6 +412,34 @@ public:
         return LXe_OK;
     }
 
+
+    LXtEdgeID FindConnectingEdge(CLxUser_Point& vert)
+    {
+        LXtEdgeID edgeID = nullptr;
+        unsigned int count, selected = 0u;
+        vert.EdgeCount(&count);
+        for (auto i = 0u; i < count; i++)
+        {
+            LXtEdgeID edge;
+            vert.EdgeByIndex(i, &edge);
+            m_edge.Select(edge);
+            if (m_edge.TestMarks(m_mark_done) == LXe_TRUE)
+                continue;
+            if (m_edge.TestMarks(m_pick) == LXe_TRUE)
+            {
+                edgeID = edge;
+                selected ++;
+            }
+        }
+        if (selected > 1)
+            m_sel_branch = true;
+        if (selected == 1)
+            return edgeID;
+        else
+            return nullptr;
+    }
+
+
     LxResult EvaluateEdgeLoop()
     {
         unsigned index;
@@ -444,34 +476,26 @@ public:
         while (1)
         {
             m_vert.Select(vrt->pnt);
-            m_vert.EdgeCount(&count);
             bool connect = false;
-            for (auto i = 0u; i < count; i++)
+            LXtEdgeID edge = FindConnectingEdge(m_vert);
+            if (edge != nullptr)
             {
-                LXtEdgeID edge;
-                m_vert.EdgeByIndex(i, &edge);
                 m_edge.Select(edge);
-                if (m_edge.TestMarks(m_mark_done) == LXe_TRUE)
-                    continue;
-                if (m_edge.TestMarks(m_pick) == LXe_TRUE)
+                m_edge.Endpoints(&v0, &v1);
+                LXtPointID pntID = (v0 == vrt->pnt) ? v1 : v0;
+                if (edgeLoop->vrts[0]->pnt == pntID)
                 {
-                    m_edge.Endpoints(&v0, &v1);
-                    LXtPointID pntID = (v0 == vrt->pnt) ? v1 : v0;
-                    if (edgeLoop->vrts[0]->pnt == pntID)
-                    {
-                        edgeLoop->closed = true;
-                        m_edge.SetMarks(m_context->m_mark_done);
-                        return LXe_OK;
-                    }
-                    else
-                    {
-                        m_edge.PolygonByIndex(0, &polID);
-                        vrt = m_context->AddVertex(pntID, polID, nullptr);
-                        edgeLoop->vrts.push_back(vrt);
-                        m_edge.SetMarks(m_context->m_mark_done);
-                        connect = true;
-                        break;
-                    }
+                    edgeLoop->closed = true;
+                    m_edge.SetMarks(m_context->m_mark_done);
+                    return LXe_OK;
+                }
+                else
+                {
+                    m_edge.PolygonByIndex(0, &polID);
+                    vrt = m_context->AddVertex(pntID, polID, nullptr);
+                    edgeLoop->vrts.push_back(vrt);
+                    m_edge.SetMarks(m_context->m_mark_done);
+                    connect = true;
                 }
             }
             if (!connect)
@@ -486,39 +510,34 @@ public:
         while (1)
         {
             m_vert.Select(vrt->pnt);
-            m_vert.EdgeCount(&count);
             bool connect = false;
-            for (auto i = 0u; i < count; i++)
+            LXtEdgeID edge = FindConnectingEdge(m_vert);
+            if (edge != nullptr)
             {
-                LXtEdgeID edge;
-                m_vert.EdgeByIndex(i, &edge);
                 m_edge.Select(edge);
-                if (m_edge.TestMarks(m_mark_done) == LXe_TRUE)
-                    continue;
-                if (m_edge.TestMarks(m_pick) == LXe_TRUE)
+                m_edge.Endpoints(&v0, &v1);
+                LXtPointID pntID = (v0 == vrt->pnt) ? v1 : v0;
+                if (edgeLoop->vrts.back()->pnt == pntID)
                 {
-                    m_edge.Endpoints(&v0, &v1);
-                    LXtPointID pntID = (v0 == vrt->pnt) ? v1 : v0;
-                    if (edgeLoop->vrts.back()->pnt == pntID)
-                    {
-                        edgeLoop->closed = true;
-                        m_edge.SetMarks(m_context->m_mark_done);
-                        return LXe_OK;
-                    }
-                    else
-                    {
-                        m_edge.PolygonByIndex(0, &polID);
-                        vrt = m_context->AddVertex(pntID, polID, nullptr);
-                        edgeLoop->vrts.insert(edgeLoop->vrts.begin(), vrt);
-                        m_edge.SetMarks(m_context->m_mark_done);
-                        connect = true;
-                        break;
-                    }
+                    edgeLoop->closed = true;
+                    m_edge.SetMarks(m_context->m_mark_done);
+                    return LXe_OK;
+                }
+                else
+                {
+                    m_edge.PolygonByIndex(0, &polID);
+                    vrt = m_context->AddVertex(pntID, polID, nullptr);
+                    edgeLoop->vrts.insert(edgeLoop->vrts.begin(), vrt);
+                    m_edge.SetMarks(m_context->m_mark_done);
+                    connect = true;
                 }
             }
             if (!connect)
                 break;
         }
+
+        if (edgeLoop->vrts.size() < 3)
+            m_context->m_edgeLoops.pop_back();
 
         return LXe_OK;
     }
@@ -531,6 +550,7 @@ public:
     LXtMarkMode     m_mark_done;
     LXtID4          m_type;
     LXtMarkMode     m_pick;
+    bool            m_sel_branch;
     struct MeshHelper*  m_context;
 };
 
@@ -1067,7 +1087,12 @@ MeshHelper::MeshHelper(CLxUser_Mesh& mesh, LXtID4 sel_type)
 #endif
     if ((m_type == LXiSEL_EDGE) && (m_edgeLoops.size() > 0))
     {
-        return;
+        if (edgeLoop.m_sel_branch)
+        {
+            m_edgeLoops.clear();
+        }
+        else
+            return;
     }
 
     // generate triangles from surface polygons
@@ -1077,7 +1102,7 @@ MeshHelper::MeshHelper(CLxUser_Mesh& mesh, LXtID4 sel_type)
     triFace.m_vert.fromMesh(m_mesh);
     triFace.m_mark_done = mesh_svc.ClearMode(LXsMARK_USER_0);
     triFace.m_context = this;
-    triFace.m_poly.Enum(&triFace, LXiMARK_ANY);
+    triFace.m_poly.Enum(&triFace, m_pick);
 
     // divides polygons by seam edges in groups.
     GroupFaceVisitor grpFace;
@@ -1087,7 +1112,7 @@ MeshHelper::MeshHelper(CLxUser_Mesh& mesh, LXtID4 sel_type)
     grpFace.m_vert.fromMesh(m_mesh);
     grpFace.m_mark_done = mesh_svc.SetMode(LXsMARK_USER_0);
     grpFace.m_context = this;
-    grpFace.m_poly.Enum(&grpFace, LXiMARK_ANY);
+    grpFace.m_poly.Enum(&grpFace, m_pick);
 
     // finalize group info
     for (auto& vrt : m_vertices)

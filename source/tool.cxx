@@ -324,6 +324,10 @@ bool CToolOp::SmoothingTriangles(MeshHelper& helper)
 
     for (auto& grp : helper.m_groups)
     {
+        if (grp->tris.size() == 0)
+            continue;
+        if (grp->vrts.size() == 0)
+            continue;
         helper.EgenMatrix(grp, V, F);
 
         // Compute Laplace-Beltrami operator: #V by #V
